@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_a0946bb33139fd022e49ba99256fb5a3 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+        
+</head>
+<body>
+    
+    
+    <h3 style="position: fixed; top: 10px; left: 50px; z-index:9999;
+               font-size:16px; font-family: Arial;">
+        <b>Pharmacies à Lkjhbvg</b> | Total: 26
+    </h3>
+    
+    
+<style>
+.circle-edit-control a,
+.circle-color-control label {
+    background: #fff;
+    padding: 4px;
+    text-decoration: none;
+    display: block;
+    cursor: pointer;
+    font-size: 11px;
+}
+.circle-edit-control a.active {
+    background: #f4b400;
+    color: #000;
+    font-weight: bold;
+}
+.circle-color-control input {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+.circle-color-control span {
+    display: block;
+    padding: 2px 4px;
+}
+.circle-undo-redo-control a {
+    background: #fff;
+    padding: 4px;
+    text-decoration: none;
+    display: block;
+    cursor: pointer;
+    font-size: 13px;
+}
+.geo-location-control a {
+    background: #fff;
+    padding: 4px;
+    text-decoration: none;
+    display: block;
+    cursor: pointer;
+    font-size: 16px;
+}
+.geo-location-control a.active {
+    background: #136aec;
+    color: #fff;
+    font-weight: bold;
+}
+</style>
+<script>
+(function() {
+    var mapVarName = "map_a0946bb33139fd022e49ba99256fb5a3";
+
+    function initCircleEditor(retries) {
+        retries = (typeof retries === "number") ? retries : 50;
+
+        if (typeof window[mapVarName] === "undefined") {
+            if (retries <= 0) {
+                console.warn("Map variable '" + mapVarName + "' non trouvée.");
+                return;
+            }
+            setTimeout(function() { initCircleEditor(retries - 1); }, 100);
+            return;
+        }
+
+        var map = window[mapVarName];
+        if (!map) {
+            console.warn("Map '" + mapVarName + "' invalide.");
+            return;
+        }
+
+        var editMode = false;
+        var selectedCircle = null;
+        var dragging = false;
+        var dragCircle = null;
+        var storageKey = "circle_editor_lkjhbvg";
+        var circlesData = [];
+        var historyStack = [];
+        var redoStack = [];
+
+        function findClosestMarker(latlng, maxDistanceMeters) {
+            var closest = null;
+            var minD = Infinity;
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.CircleMarker && !(layer instanceof L.Circle)) {
+                    try {
+                        var d = map.distance(latlng, layer.getLatLng());
+                        if (d <= maxDistanceMeters && d < minD) {
+                            minD = d;
+                            closest = layer;
+                        }
+                    } catch (e) {}
+                }
+            });
+            return closest;
+        }
+
+        function getCurrentSnapshot() {
+            return circlesData.map(function(entry) {
+                var circle = entry.circle;
+                if (!circle) {
+                    return null;
+                }
+                var ll = circle.getLatLng();
+                var opts = circle.options || {};
+                return {
+                    lat: ll.lat,
+                    lng: ll.lng,
+                    radius: opts.radius || 300,
+                    color: opts.color || "#808080",
+                    fillColor: opts.fillColor || opts.color || "#808080",
+                    fillOpacity: (typeof opts.fillOpacity !== "undefined") ? opts.fillOpacity : 0.4,
+                    weight: (typeof opts.weight !== "undefined") ? opts.weight : 1
+                };
+            }).filter(function(x) { return x !== null; });
+        }
+
+        function saveCircles() {
+            try {
+                var data = getCurrentSnapshot();
+                localStorage.setItem(storageKey, JSON.stringify(data));
+            } catch (e) {
+                console.warn("Impossible de sauvegarder les cercles (localStorage):", e);
+            }
+        }
+
+        function pushHistory() {
+            try {
+                var snap = getCurrentSnapshot();
+                historyStack.push(snap);
+                redoStack = [];
+            } catch (e) {
+                console.warn("Impossible d'ajouter à l'historique:", e);
+            }
+        }
+
+        function loadCirclesFromStorage() {
+            try {
+                var raw = localStorage.getItem(storageKey);
+                if (!raw) {
+                    return null;
+                }
+                return JSON.parse(raw);
+            } catch (e) {
+                console.warn("Impossible de charger les cercles sauvegardés:", e);
+                return null;
+            }
+        }
+
+        function clearCurrentCircles() {
+            var toRemove = [];
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Circle) {
+                    toRemove.push(layer);
+                }
+            });
+            toRemove.forEach(function(layer) {
+                map.removeLayer(layer);
+            });
+        }
+
+        function cleanupUnusedEditorMarkers() {
+            var usedMarkers = circlesData
+                .map(function(entry) { return entry.marker; })
+                .filter(function(m) { return !!m; });
+
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.CircleMarker && layer.__circleEditor) {
+                    var stillUsed = usedMarkers.indexOf(layer) !== -1;
+                    if (!stillUsed) {
+                        map.removeLayer(layer);
+                    }
+                }
+            });
+        }
+
+        function rgbToHex(color) {
+            if (!color) {
+                return null;
+            }
+            if (color.indexOf("#") === 0) {
+                return color;
+            }
+            var ctx = document.createElement("canvas").getContext("2d");
+            ctx.fillStyle = color;
+            var computed = ctx.fillStyle;
+            if (computed.indexOf("#") === 0) {
+                return computed;
+            }
+            return null;
+        }
+
+        function setSelectedCircle(circle) {
+            selectedCircle = circle;
+            var input = document.getElementById("circle-color-input");
+            if (selectedCircle && selectedCircle.options && input) {
+                var c = selectedCircle.options.color || "#808080";
+                var hex = rgbToHex(c) || "#808080";
+                input.value = hex;
+            }
+        }
+
+        function removeCircle(circle) {
+            pushHistory();
+
+            circlesData = circlesData.filter(function(entry) {
+                if (entry.circle === circle) {
+                    if (entry.marker) {
+                        map.removeLayer(entry.marker);
+                    }
+                    return false;
+                }
+                return true;
+            });
+
+            if (selectedCircle === circle) {
+                selectedCircle = null;
+            }
+            map.removeLayer(circle);
+            saveCircles();
+        }
+
+        function registerCircle(circle, marker, skipSave) {
+            if (!circle) {
+                return;
+            }
+            circlesData.push({ circle: circle, marker: marker });
+
+            circle.on("click", function(e) {
+                L.DomEvent.stop(e);
+                if (!editMode) {
+                    if (marker && typeof marker.openPopup === "function") {
+                        marker.openPopup();
+                    }
+                    return;
+                }
+                setSelectedCircle(circle);
+            });
+
+            circle.on("contextmenu", function(e) {
+                if (!editMode) {
+                    return;
+                }
+                L.DomEvent.stop(e);
+                removeCircle(circle);
+            });
+
+            circle.on("mousedown", function(e) {
+                if (!editMode) {
+                    return;
+                }
+                L.DomEvent.stop(e);
+                pushHistory();
+                dragging = true;
+                dragCircle = circle;
+                map.dragging.disable();
+            });
+
+            if (!skipSave) {
+                saveCircles();
+            }
+        }
+
+        function applySnapshot(list) {
+            clearCurrentCircles();
+            circlesData = [];
+
+            list.forEach(function(item) {
+                var ll = L.latLng(item.lat, item.lng);
+                var circle = L.circle(ll, {
+                    radius: item.radius || 300,
+                    color: item.color || "#808080",
+                    fillColor: item.fillColor || item.color || "#808080",
+                    fillOpacity: (typeof item.fillOpacity !== "undefined") ? item.fillOpacity : 0.4,
+                    weight: (typeof item.weight !== "undefined") ? item.weight : 1
+                }).addTo(map);
+
+                var marker = findClosestMarker(ll, 30);
+                if (!marker) {
+                    marker = L.circleMarker(ll, {
+                        radius: 4,
+                        color: "#ff0000",
+                        fillColor: "#ff0000",
+                        fillOpacity: 1
+                    }).addTo(map);
+                    marker.__circleEditor = true;
+                } else if (typeof marker.setLatLng === "function") {
+                    marker.setLatLng(ll);
+                }
+
+                registerCircle(circle, marker, true);
+            });
+
+            cleanupUnusedEditorMarkers();
+            saveCircles();
+        }
+
+        function rebuildCirclesFromData(savedList) {
+            if (!savedList || !savedList.length) {
+                return;
+            }
+            applySnapshot(savedList);
+        }
+
+        function undo() {
+            if (!editMode) {
+                return;
+            }
+            if (!historyStack.length) {
+                return;
+            }
+            var current = getCurrentSnapshot();
+            var prev = historyStack.pop();
+            redoStack.push(current);
+            applySnapshot(prev);
+        }
+
+        function redo() {
+            if (!editMode) {
+                return;
+            }
+            if (!redoStack.length) {
+                return;
+            }
+            var current = getCurrentSnapshot();
+            var next = redoStack.pop();
+            historyStack.push(current);
+            applySnapshot(next);
+        }
+
+        function initExistingCircles() {
+            var saved = loadCirclesFromStorage();
+            if (saved && saved.length) {
+                rebuildCirclesFromData(saved);
+            } else {
+                circlesData = [];
+                map.eachLayer(function(layer) {
+                    if (layer instanceof L.Circle) {
+                        var ll = layer.getLatLng();
+                        var marker = findClosestMarker(ll, 30);
+                        if (marker && typeof marker.setLatLng === "function") {
+                            marker.setLatLng(ll);
+                        }
+                        registerCircle(layer, marker, true);
+                    }
+                });
+                saveCircles();
+            }
+            historyStack = [];
+            redoStack = [];
+            historyStack.push(getCurrentSnapshot());
+        }
+
+        function onMapClick(e) {
+            if (!editMode) {
+                return;
+            }
+            pushHistory();
+
+            var circle = L.circle(e.latlng, {
+                radius: 300,
+                color: "#808080",
+                fillColor: "#808080",
+                fillOpacity: 0.4,
+                weight: 1
+            }).addTo(map);
+
+            var centerMarker = L.circleMarker(e.latlng, {
+                radius: 4,
+                color: "#ff0000",
+                fillColor: "#ff0000",
+                fillOpacity: 1
+            }).addTo(map);
+            centerMarker.__circleEditor = true;
+
+            registerCircle(circle, centerMarker, false);
+            setSelectedCircle(circle);
+        }
+
+        function onMouseMove(e) {
+            if (!editMode || !dragging || !dragCircle) {
+                return;
+            }
+            dragCircle.setLatLng(e.latlng);
+
+            circlesData.forEach(function(entry) {
+                if (entry.circle === dragCircle && entry.marker) {
+                    entry.marker.setLatLng(e.latlng);
+                }
+            });
+        }
+
+        function onMouseUp(e) {
+            if (!dragging) {
+                return;
+            }
+            dragging = false;
+            dragCircle = null;
+            map.dragging.enable();
+            saveCircles();
+        }
+
+        function toggleEditMode() {
+            editMode = !editMode;
+            var btn = document.getElementById("circle-edit-toggle");
+            if (btn) {
+                if (editMode) {
+                    btn.classList.add("active");
+                    btn.innerHTML = "Quitter le mode édition";
+                } else {
+                    btn.classList.remove("active");
+                    btn.innerHTML = "Mode édition cercles";
+                }
+            }
+        }
+
+        function createEditControls() {
+            var EditControl = L.Control.extend({
+                options: { position: "topleft" },
+                onAdd: function(map) {
+                    var container = L.DomUtil.create("div", "leaflet-bar circle-edit-control");
+                    var btn = L.DomUtil.create("a", "", container);
+                    btn.href = "#";
+                    btn.id = "circle-edit-toggle";
+                    btn.title = "Basculer le mode édition";
+                    btn.innerHTML = "Mode";
+                    L.DomEvent.on(btn, "click", function(e) {
+                        L.DomEvent.preventDefault(e);
+                        toggleEditMode();
+                    });
+                    return container;
+                }
+            });
+            map.addControl(new EditControl());
+
+            var ColorControl = L.Control.extend({
+                options: { position: "topleft" },
+                onAdd: function(map) {
+                    var container = L.DomUtil.create("div", "leaflet-bar circle-color-control");
+                    var label = L.DomUtil.create("label", "", container);
+                    var span = L.DomUtil.create("span", "", label);
+                    span.innerHTML = "Couleur cercle";
+                    var input = L.DomUtil.create("input", "", label);
+                    input.id = "circle-color-input";
+                    input.type = "color";
+                    input.value = "#808080";
+                    L.DomEvent.on(input, "input", function(e) {
+                        if (!selectedCircle) {
+                            return;
+                        }
+                        pushHistory();
+                        var color = e.target.value || "#808080";
+                        selectedCircle.setStyle({ color: color, fillColor: color });
+                        saveCircles();
+                    });
+                    return container;
+                }
+            });
+            map.addControl(new ColorControl());
+
+            var UndoRedoControl = L.Control.extend({
+                options: { position: "topleft" },
+                onAdd: function(map) {
+                    var container = L.DomUtil.create("div", "leaflet-bar circle-undo-redo-control");
+                    var undoBtn = L.DomUtil.create("a", "", container);
+                    undoBtn.href = "#";
+                    undoBtn.title = "Annuler (Ctrl+Z)";
+                    undoBtn.innerHTML = "↶";
+                    var redoBtn = L.DomUtil.create("a", "", container);
+                    redoBtn.href = "#";
+                    redoBtn.title = "Rétablir (Ctrl+Y)";
+                    redoBtn.innerHTML = "↷";
+                    L.DomEvent.on(undoBtn, "click", function(e) {
+                        L.DomEvent.preventDefault(e);
+                        undo();
+                    });
+                    L.DomEvent.on(redoBtn, "click", function(e) {
+                        L.DomEvent.preventDefault(e);
+                        redo();
+                    });
+                    return container;
+                }
+            });
+            map.addControl(new UndoRedoControl());
+
+            function stop(e) {
+                L.DomEvent.stopPropagation(e);
+            }
+            var controls = document.getElementsByClassName("circle-edit-control");
+            for (var i = 0; i < controls.length; i++) {
+                L.DomEvent.on(controls[i], "mousedown", stop);
+                L.DomEvent.on(controls[i], "dblclick", stop);
+                L.DomEvent.on(controls[i], "click", stop);
+            }
+            controls = document.getElementsByClassName("circle-color-control");
+            for (var j = 0; j < controls.length; j++) {
+                L.DomEvent.on(controls[j], "mousedown", stop);
+                L.DomEvent.on(controls[j], "dblclick", stop);
+                L.DomEvent.on(controls[j], "click", stop);
+            }
+            controls = document.getElementsByClassName("circle-undo-redo-control");
+            for (var k = 0; k < controls.length; k++) {
+                L.DomEvent.on(controls[k], "mousedown", stop);
+                L.DomEvent.on(controls[k], "dblclick", stop);
+                L.DomEvent.on(controls[k], "click", stop);
+            }
+        }
+
+        function onKeyDown(e) {
+            if (!editMode) {
+                return;
+            }
+            var isCtrlOrCmd = e.ctrlKey || e.metaKey;
+            if (!isCtrlOrCmd) {
+                return;
+            }
+            var key = e.key || e.keyCode;
+            if (key === "z" || key === "Z" || key === 90) {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    redo();
+                } else {
+                    undo();
+                }
+            } else if (key === "y" || key === "Y" || key === 89) {
+                e.preventDefault();
+                redo();
+            }
+        }
+
+        map.on("click", onMapClick);
+        map.on("mousemove", onMouseMove);
+        map.on("mouseup", onMouseUp);
+        document.addEventListener("mouseup", onMouseUp);
+        document.addEventListener("keydown", onKeyDown);
+
+        initExistingCircles();
+        createEditControls();
+    }
+
+    if (document.readyState !== "loading") {
+        initCircleEditor();
+    } else {
+        document.addEventListener("DOMContentLoaded", function() {
+            initCircleEditor();
+        });
+    }
+})();
+</script>
+    
+<script>
+(function() {
+    var mapVarName = "map_a0946bb33139fd022e49ba99256fb5a3";
+
+    function initGeoControl(retries) {
+        retries = (typeof retries === "number") ? retries : 50;
+        if (typeof window[mapVarName] === "undefined") {
+            if (retries <= 0) {
+                console.warn("Map variable '" + mapVarName + "' non trouvée pour la géolocalisation.");
+                return;
+            }
+            setTimeout(function() { initGeoControl(retries - 1); }, 100);
+            return;
+        }
+
+        var map = window[mapVarName];
+        if (!map) {
+            console.warn("Map '" + mapVarName + "' invalide pour la géolocalisation.");
+            return;
+        }
+
+        var geoMarker = null;  // point bleu Google Maps
+        var geoCircle = null;  // cercle de précision
+        var geoWatchId = null;
+        var hasCentered = false;
+
+        function stopTracking() {
+            if (geoWatchId !== null) {
+                navigator.geolocation.clearWatch(geoWatchId);
+                geoWatchId = null;
+            }
+        }
+
+        function onSuccess(position) {
+            var lat = position.coords.latitude;
+            var lng = position.coords.longitude;
+            var accuracy = position.coords.accuracy || 50;
+            var latlng = L.latLng(lat, lng);
+
+            // --- style Google Maps : point bleu rond avec bord blanc ---
+            if (!geoMarker) {
+                geoMarker = L.circleMarker(latlng, {
+                    radius: 6,
+                    color: "#ffffff",       // bord blanc
+                    weight: 2,
+                    fillColor: "#4285F4",   // bleu Google Maps
+                    fillOpacity: 1
+                }).addTo(map);
+            } else {
+                geoMarker.setLatLng(latlng);
+            }
+
+            // --- cercle de précision bleu très clair ---
+            if (!geoCircle) {
+                geoCircle = L.circle(latlng, {
+                    radius: accuracy,
+                    color: "#4285F4",
+                    fillColor: "#4285F4",
+                    fillOpacity: 0.15,
+                    weight: 1
+                }).addTo(map);
+            } else {
+                geoCircle.setLatLng(latlng);
+                geoCircle.setRadius(accuracy);
+            }
+
+            if (!hasCentered) {
+                map.setView(latlng, 16);
+                hasCentered = true;
+            }
+        }
+
+        function onError(err) {
+            console.warn("Erreur de géolocalisation:", err);
+            alert("Impossible de récupérer votre position : " + err.message);
+            stopTracking();
+            var btn = document.getElementById("geo-location-toggle");
+            if (btn) {
+                btn.classList.remove("active");
+            }
+        }
+
+        function startTracking() {
+            if (!navigator.geolocation) {
+                alert("La géolocalisation n'est pas supportée par ce navigateur.");
+                return;
+            }
+            if (geoWatchId !== null) {
+                return;
+            }
+            hasCentered = false;
+            geoWatchId = navigator.geolocation.watchPosition(
+                onSuccess,
+                onError,
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+            );
+        }
+
+        var GeoControl = L.Control.extend({
+            options: { position: "topleft" },
+            onAdd: function(map) {
+                var container = L.DomUtil.create("div", "leaflet-bar geo-location-control");
+                var btn = L.DomUtil.create("a", "", container);
+                btn.href = "#";
+                btn.title = "Afficher ma position";
+                btn.innerHTML = "📍";
+                btn.id = "geo-location-toggle";
+
+                L.DomEvent.on(btn, "click", function(e) {
+                    L.DomEvent.preventDefault(e);
+                    if (geoWatchId === null) {
+                        startTracking();
+                        btn.classList.add("active");
+                    } else {
+                        stopTracking();
+                        btn.classList.remove("active");
+                    }
+                });
+
+                L.DomEvent.disableClickPropagation(container);
+                L.DomEvent.disableScrollPropagation(container);
+
+                return container;
+            }
+        });
+
+        map.addControl(new GeoControl());
+    }
+
+    if (document.readyState !== "loading") {
+        initGeoControl();
+    } else {
+        document.addEventListener("DOMContentLoaded", function() {
+            initGeoControl();
+        });
+    }
+})();
+</script>
+    
+            <div class="folium-map" id="map_a0946bb33139fd022e49ba99256fb5a3" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_a0946bb33139fd022e49ba99256fb5a3 = L.map(
+                "map_a0946bb33139fd022e49ba99256fb5a3",
+                {
+                    center: [27.132109496296025, -13.17474338341232],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 13,
+  "zoomControl": true,
+  "preferCanvas": false,
+  "name": "Carte \u00c9pur\u00e9e",
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_caa705b8f07450d46ac92d60e4dd98ed = L.tileLayer(
+                "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 20,
+  "maxNativeZoom": 20,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors \u0026copy; \u003ca href=\"https://carto.com/attributions\"\u003eCARTO\u003c/a\u003e",
+  "subdomains": "abcd",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_caa705b8f07450d46ac92d60e4dd98ed.addTo(map_a0946bb33139fd022e49ba99256fb5a3);
+        
+    
+            var tile_layer_2f7a86eda4970ad19ce74612d936f360 = L.tileLayer(
+                "https://mt1.google.com/vt/lyrs=m\u0026x={x}\u0026y={y}\u0026z={z}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Google",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_2f7a86eda4970ad19ce74612d936f360.addTo(map_a0946bb33139fd022e49ba99256fb5a3);
+        
+    
+            var tile_layer_5f3f31f1b1e51b410b176b98494b837e = L.tileLayer(
+                "https://mt1.google.com/vt/lyrs=s\u0026x={x}\u0026y={y}\u0026z={z}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Google",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_5f3f31f1b1e51b410b176b98494b837e.addTo(map_a0946bb33139fd022e49ba99256fb5a3);
+        
+    
+            var tile_layer_d15dd62f60466f00bfca3f6703108c13 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_d15dd62f60466f00bfca3f6703108c13.addTo(map_a0946bb33139fd022e49ba99256fb5a3);
+        
+    
+            var feature_group_b26e1aab13a1db30ece388fb9daa38ef = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var circle_marker_9e648c234b1400c96e4df46f24c8b119 = L.circleMarker(
+                [27.13179169999999, -13.1748544],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_dcb9e3ea20de33b11341c6f98eeb352c = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_f5ce4029d72afb6e8b6b81536e371cbd = $(`<div id="html_f5ce4029d72afb6e8b6b81536e371cbd" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al Wifag</b><br>4RJG+P36, Laâyoune</div>`)[0];
+                popup_dcb9e3ea20de33b11341c6f98eeb352c.setContent(html_f5ce4029d72afb6e8b6b81536e371cbd);
+            
+        
+
+        circle_marker_9e648c234b1400c96e4df46f24c8b119.bindPopup(popup_dcb9e3ea20de33b11341c6f98eeb352c)
+        ;
+
+        
+    
+    
+            var circle_ca720e068b479320db51b0f0aff31584 = L.circle(
+                [27.13179169999999, -13.1748544],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_8c0d9ec4be357ba747032f4e0992b05b = L.circleMarker(
+                [27.1344479, -13.1747227],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_c9cf95bfe26c2377c4a3f0db7b5af168 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_2c4205f4a46f4cefd2338a0981c8222a = $(`<div id="html_2c4205f4a46f4cefd2338a0981c8222a" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Pyramis</b><br>4RMG+Q5, Laâyoune</div>`)[0];
+                popup_c9cf95bfe26c2377c4a3f0db7b5af168.setContent(html_2c4205f4a46f4cefd2338a0981c8222a);
+            
+        
+
+        circle_marker_8c0d9ec4be357ba747032f4e0992b05b.bindPopup(popup_c9cf95bfe26c2377c4a3f0db7b5af168)
+        ;
+
+        
+    
+    
+            var circle_8fa681b1663bcacbe1bbf71a0ff26a07 = L.circle(
+                [27.1344479, -13.1747227],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_e2aacc3d462c0aea0312fef6614102cb = L.circleMarker(
+                [27.1331127, -13.170527],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_e8fddbfb3b21cba9bc0f858f5a6e0161 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_89b2676037ae6e328acb340e6d26ca55 = $(`<div id="html_89b2676037ae6e328acb340e6d26ca55" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Hay Al Mostaqbal</b><br>4RMH+6QX, Laâyoune</div>`)[0];
+                popup_e8fddbfb3b21cba9bc0f858f5a6e0161.setContent(html_89b2676037ae6e328acb340e6d26ca55);
+            
+        
+
+        circle_marker_e2aacc3d462c0aea0312fef6614102cb.bindPopup(popup_e8fddbfb3b21cba9bc0f858f5a6e0161)
+        ;
+
+        
+    
+    
+            var circle_599974155b30c2c8d2334193b0d22c59 = L.circle(
+                [27.1331127, -13.170527],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_1343619f43e06ce9079d5e5cbd7f97db = L.circleMarker(
+                [27.134552, -13.1783886],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_5930613b0c55a0d9840b97b442f5bffc = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_7e8cd976fd407593d190a9c6966e9214 = $(`<div id="html_7e8cd976fd407593d190a9c6966e9214" style="width: 100.0%; height: 100.0%;"><b>Pharmacie ERRAHA</b><br>4RMC+RJH, Laâyoune</div>`)[0];
+                popup_5930613b0c55a0d9840b97b442f5bffc.setContent(html_7e8cd976fd407593d190a9c6966e9214);
+            
+        
+
+        circle_marker_1343619f43e06ce9079d5e5cbd7f97db.bindPopup(popup_5930613b0c55a0d9840b97b442f5bffc)
+        ;
+
+        
+    
+    
+            var circle_1a8788657321da23ac774c0a4ba9a3f5 = L.circle(
+                [27.134552, -13.1783886],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_79a3707c451f796f6073de4d71990a6c = L.circleMarker(
+                [27.1296176, -13.1792003],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_3535e674a27a80dcf0f3b297e04b5afe = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_e969e8a33958ee8712200de805c4d8e7 = $(`<div id="html_e969e8a33958ee8712200de805c4d8e7" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al Rahmane</b><br>حي القدس - تجزئة الوفاق 1500 رقم 1073 - أمام الملحقة الإدارية السابعة عشر, El Aaiún</div>`)[0];
+                popup_3535e674a27a80dcf0f3b297e04b5afe.setContent(html_e969e8a33958ee8712200de805c4d8e7);
+            
+        
+
+        circle_marker_79a3707c451f796f6073de4d71990a6c.bindPopup(popup_3535e674a27a80dcf0f3b297e04b5afe)
+        ;
+
+        
+    
+    
+            var circle_343ffa685eac1f90168841b74b2f6b6c = L.circle(
+                [27.1296176, -13.1792003],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_272470c6a62e29e8df31c008b51b93a4 = L.circleMarker(
+                [27.1303714, -13.1693311],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_493de0ba3e002c7e9672525e4808ffb5 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_ce19a6d3316411b51be156305cc2e662 = $(`<div id="html_ce19a6d3316411b51be156305cc2e662" style="width: 100.0%; height: 100.0%;"><b>Pharmacie صيدلية ما شاء الله</b><br>4RJJ+47V, Laâyoune</div>`)[0];
+                popup_493de0ba3e002c7e9672525e4808ffb5.setContent(html_ce19a6d3316411b51be156305cc2e662);
+            
+        
+
+        circle_marker_272470c6a62e29e8df31c008b51b93a4.bindPopup(popup_493de0ba3e002c7e9672525e4808ffb5)
+        ;
+
+        
+    
+    
+            var circle_b0039d38b8083fe57fb61d1dcec6e684 = L.circle(
+                [27.1303714, -13.1693311],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_69d15e0fce020d75a08770393254ce6e = L.circleMarker(
+                [27.1268322, -13.173406],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_084428b1896df4541666821a9a0f3418 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_9eab283d95312c502d57af784444b56b = $(`<div id="html_9eab283d95312c502d57af784444b56b" style="width: 100.0%; height: 100.0%;"><b>Pharmacie El Mazmour</b><br>4RGG+PJQ, Laâyoune</div>`)[0];
+                popup_084428b1896df4541666821a9a0f3418.setContent(html_9eab283d95312c502d57af784444b56b);
+            
+        
+
+        circle_marker_69d15e0fce020d75a08770393254ce6e.bindPopup(popup_084428b1896df4541666821a9a0f3418)
+        ;
+
+        
+    
+    
+            var circle_e7fc540e74534f9ac84c78d9a1abd7d3 = L.circle(
+                [27.1268322, -13.173406],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_5beff738715846d36d938dcd9c5ecbec = L.circleMarker(
+                [27.1267457, -13.1770414],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_7f1d54d03e2cde5de91d58354e814ac2 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_a8a7c691d6ec917e48692e0c079942eb = $(`<div id="html_a8a7c691d6ec917e48692e0c079942eb" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Maryam</b><br>4RGF+M5W, Laâyoune</div>`)[0];
+                popup_7f1d54d03e2cde5de91d58354e814ac2.setContent(html_a8a7c691d6ec917e48692e0c079942eb);
+            
+        
+
+        circle_marker_5beff738715846d36d938dcd9c5ecbec.bindPopup(popup_7f1d54d03e2cde5de91d58354e814ac2)
+        ;
+
+        
+    
+    
+            var circle_8666f82845c11882837156a14c74b24f = L.circle(
+                [27.1267457, -13.1770414],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_f0147102a7276012c79ccc71ce4d274d = L.circleMarker(
+                [27.1332502, -13.1813052],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_c8834ec2b6ed85ae83853388dfcd0952 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_238861735ce3b97d5c4ff910c7974da1 = $(`<div id="html_238861735ce3b97d5c4ff910c7974da1" style="width: 100.0%; height: 100.0%;"><b>صيدلية أبي</b><br>4RM9+8F, Laâyoune</div>`)[0];
+                popup_c8834ec2b6ed85ae83853388dfcd0952.setContent(html_238861735ce3b97d5c4ff910c7974da1);
+            
+        
+
+        circle_marker_f0147102a7276012c79ccc71ce4d274d.bindPopup(popup_c8834ec2b6ed85ae83853388dfcd0952)
+        ;
+
+        
+    
+    
+            var circle_943fa7d6ab21cbdadd4d69b5fb684069 = L.circle(
+                [27.1332502, -13.1813052],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_0feb51f0ab3a4018c06ac35b5ab8df60 = L.circleMarker(
+                [27.1382396, -13.1753014],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_dab9da0bf56d8ced7a9c8ec42b514e1f = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_70361130e3866fcd7dd010d4f00ef1cf = $(`<div id="html_70361130e3866fcd7dd010d4f00ef1cf" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Habiba</b><br>4RQF+7VW, Laâyoune</div>`)[0];
+                popup_dab9da0bf56d8ced7a9c8ec42b514e1f.setContent(html_70361130e3866fcd7dd010d4f00ef1cf);
+            
+        
+
+        circle_marker_0feb51f0ab3a4018c06ac35b5ab8df60.bindPopup(popup_dab9da0bf56d8ced7a9c8ec42b514e1f)
+        ;
+
+        
+    
+    
+            var circle_936c61c2edd52d7c34be9ee8a2a31c79 = L.circle(
+                [27.1382396, -13.1753014],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_649f00cc5b9d16415ee57dcc7f7bfdd2 = L.circleMarker(
+                [27.1276216, -13.1699692],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_39716545bdac68cff7f2cb250a0b8749 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_05257917fb86ad0be11d891f7be2aafe = $(`<div id="html_05257917fb86ad0be11d891f7be2aafe" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Internationale Laâyoune</b><br>N 97, El-Aaiún</div>`)[0];
+                popup_39716545bdac68cff7f2cb250a0b8749.setContent(html_05257917fb86ad0be11d891f7be2aafe);
+            
+        
+
+        circle_marker_649f00cc5b9d16415ee57dcc7f7bfdd2.bindPopup(popup_39716545bdac68cff7f2cb250a0b8749)
+        ;
+
+        
+    
+    
+            var circle_f74bbaf5365329a1fa8af9274a7ce258 = L.circle(
+                [27.1276216, -13.1699692],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_da3e2fccee56733f5c4628eae4315338 = L.circleMarker(
+                [27.1360695, -13.1814498],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_a690a771510d7e449e9d017a43c4f22c = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_967b55d48b4f43bb0a00d8e4252018fe = $(`<div id="html_967b55d48b4f43bb0a00d8e4252018fe" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al Yousr</b><br>4RP9+CCF, Laâyoune</div>`)[0];
+                popup_a690a771510d7e449e9d017a43c4f22c.setContent(html_967b55d48b4f43bb0a00d8e4252018fe);
+            
+        
+
+        circle_marker_da3e2fccee56733f5c4628eae4315338.bindPopup(popup_a690a771510d7e449e9d017a43c4f22c)
+        ;
+
+        
+    
+    
+            var circle_ff38b86a44eb5186931dd0af7698dbfc = L.circle(
+                [27.1360695, -13.1814498],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_67b10c232e340778dff06ec12d3052a6 = L.circleMarker(
+                [27.1326621, -13.1665195],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_c0d97cf5b3b5f258e22694b2d92c8cd3 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_7e2b7f667eaeea405996ff0bc8786303 = $(`<div id="html_7e2b7f667eaeea405996ff0bc8786303" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Ibn Al Baitar</b><br>4RMM+399, Laâyoune</div>`)[0];
+                popup_c0d97cf5b3b5f258e22694b2d92c8cd3.setContent(html_7e2b7f667eaeea405996ff0bc8786303);
+            
+        
+
+        circle_marker_67b10c232e340778dff06ec12d3052a6.bindPopup(popup_c0d97cf5b3b5f258e22694b2d92c8cd3)
+        ;
+
+        
+    
+    
+            var circle_4a036055504659d363e621105ddaf280 = L.circle(
+                [27.1326621, -13.1665195],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_c2cd303da74ff789b2a8b019d611e0ac = L.circleMarker(
+                [27.13816319999999, -13.1698555],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_814d130749f7fa76831d56bb7f957003 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_ce747b7a1d5a5e1e8f5534bed753716b = $(`<div id="html_ce747b7a1d5a5e1e8f5534bed753716b" style="width: 100.0%; height: 100.0%;"><b>Parapharmacie BELLA NOJOUD</b><br>4RQJ+736, Laâyoune</div>`)[0];
+                popup_814d130749f7fa76831d56bb7f957003.setContent(html_ce747b7a1d5a5e1e8f5534bed753716b);
+            
+        
+
+        circle_marker_c2cd303da74ff789b2a8b019d611e0ac.bindPopup(popup_814d130749f7fa76831d56bb7f957003)
+        ;
+
+        
+    
+    
+            var circle_d6851a5f366fa7c831ef31bb6268dea5 = L.circle(
+                [27.13816319999999, -13.1698555],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_d9a833e0098a0d84432851c73348812f = L.circleMarker(
+                [27.1306501, -13.1831515],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_f27a6f2976e3d1e3c59b9ed9f27235b8 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_100d5784fe1290c99e72db439c2d5510 = $(`<div id="html_100d5784fe1290c99e72db439c2d5510" style="width: 100.0%; height: 100.0%;"><b>Pharmacie & Parapharmacie Larabass</b><br>4RJ8+9X, Laâyoune</div>`)[0];
+                popup_f27a6f2976e3d1e3c59b9ed9f27235b8.setContent(html_100d5784fe1290c99e72db439c2d5510);
+            
+        
+
+        circle_marker_d9a833e0098a0d84432851c73348812f.bindPopup(popup_f27a6f2976e3d1e3c59b9ed9f27235b8)
+        ;
+
+        
+    
+    
+            var circle_7aad0b16fa1d57bc5948f8e0f3b32f72 = L.circle(
+                [27.1306501, -13.1831515],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_d3b59fbff9131770e17aa53af63da924 = L.circleMarker(
+                [27.1298416, -13.1661324],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_fefe19f43ecbecefe677114dcab35624 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_abb88799d316ab514f8dec1fcf61853a = $(`<div id="html_abb88799d316ab514f8dec1fcf61853a" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al Amal</b><br>4RHM+WGQ, Laâyoune</div>`)[0];
+                popup_fefe19f43ecbecefe677114dcab35624.setContent(html_abb88799d316ab514f8dec1fcf61853a);
+            
+        
+
+        circle_marker_d3b59fbff9131770e17aa53af63da924.bindPopup(popup_fefe19f43ecbecefe677114dcab35624)
+        ;
+
+        
+    
+    
+            var circle_fdd9d1bb1cde3841637db2bdd7744efb = L.circle(
+                [27.1298416, -13.1661324],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_e410c674a2a081416fb77d06ab31f011 = L.circleMarker(
+                [27.1362769, -13.1664202],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_620bc206d762365efcb368d46c1bf308 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_0e129721cdceecdacf450cc89dcffd07 = $(`<div id="html_0e129721cdceecdacf450cc89dcffd07" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Hay Jamaà</b><br>4RPM+GC8, Laâyoune</div>`)[0];
+                popup_620bc206d762365efcb368d46c1bf308.setContent(html_0e129721cdceecdacf450cc89dcffd07);
+            
+        
+
+        circle_marker_e410c674a2a081416fb77d06ab31f011.bindPopup(popup_620bc206d762365efcb368d46c1bf308)
+        ;
+
+        
+    
+    
+            var circle_261ff046205d6a0201fb01dd2198602c = L.circle(
+                [27.1362769, -13.1664202],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_71fbbce613b5b524c60c611c41acc2f1 = L.circleMarker(
+                [27.1401578, -13.1782012],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_dfde579d534b8d1319e0039c5095dfbb = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_5ffdfcda1037644d891922be4abe0afd = $(`<div id="html_5ffdfcda1037644d891922be4abe0afd" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al Haramain</b><br>4RRC+3P7, Laâyoune</div>`)[0];
+                popup_dfde579d534b8d1319e0039c5095dfbb.setContent(html_5ffdfcda1037644d891922be4abe0afd);
+            
+        
+
+        circle_marker_71fbbce613b5b524c60c611c41acc2f1.bindPopup(popup_dfde579d534b8d1319e0039c5095dfbb)
+        ;
+
+        
+    
+    
+            var circle_77f367dc33916e9c186ec7f8e008f475 = L.circle(
+                [27.1401578, -13.1782012],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_b8a8f53539795ace2090a640fb0089f5 = L.circleMarker(
+                [27.123141, -13.1749814],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_59d56563d83834235ba407b4fb8083fe = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_fdca1519933fec108f8b17cc8cb9420d = $(`<div id="html_fdca1519933fec108f8b17cc8cb9420d" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Oued Chbika</b><br>4RFF+2M3, Laâyoune</div>`)[0];
+                popup_59d56563d83834235ba407b4fb8083fe.setContent(html_fdca1519933fec108f8b17cc8cb9420d);
+            
+        
+
+        circle_marker_b8a8f53539795ace2090a640fb0089f5.bindPopup(popup_59d56563d83834235ba407b4fb8083fe)
+        ;
+
+        
+    
+    
+            var circle_5a381d3b382715ce225cb56c01a6d2e8 = L.circle(
+                [27.123141, -13.1749814],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_30160e9ff77e46840f8aebddd59dddf3 = L.circleMarker(
+                [27.1235614, -13.1780701],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_1ddf65c4c1b6602f4a79b92933f450ff = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_7201faeeeedc71ee15d82793ace6ae88 = $(`<div id="html_7201faeeeedc71ee15d82793ace6ae88" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Karama</b><br>4RFC+CQF, Laâyoune</div>`)[0];
+                popup_1ddf65c4c1b6602f4a79b92933f450ff.setContent(html_7201faeeeedc71ee15d82793ace6ae88);
+            
+        
+
+        circle_marker_30160e9ff77e46840f8aebddd59dddf3.bindPopup(popup_1ddf65c4c1b6602f4a79b92933f450ff)
+        ;
+
+        
+    
+    
+            var circle_ddcf45691dfed9f0d0e7405d1134f4c7 = L.circle(
+                [27.1235614, -13.1780701],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_0760682cd1e4df6f45106135d2c4a1c1 = L.circleMarker(
+                [27.13911589999999, -13.1678613],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_e2004ccb0d1f21318de9499d2fe1c022 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_05991068ab44a88aea3d515c4d21ce1c = $(`<div id="html_05991068ab44a88aea3d515c4d21ce1c" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al Farabi صيدلية الفرابي</b><br>4RQJ+JVR, Laâyoune</div>`)[0];
+                popup_e2004ccb0d1f21318de9499d2fe1c022.setContent(html_05991068ab44a88aea3d515c4d21ce1c);
+            
+        
+
+        circle_marker_0760682cd1e4df6f45106135d2c4a1c1.bindPopup(popup_e2004ccb0d1f21318de9499d2fe1c022)
+        ;
+
+        
+    
+    
+            var circle_b6353d119ec3a030f1ccb9a8e21fd52f = L.circle(
+                [27.13911589999999, -13.1678613],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_9caadf7b9c7263fec64fb0d05bbad515 = L.circleMarker(
+                [27.1332986, -13.185187],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_ed0ef1481faded813612e100412dedd6 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_72486936daef1c6d1a4ca398395541f0 = $(`<div id="html_72486936daef1c6d1a4ca398395541f0" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Annas Bnou Malek</b><br>4RM7+8W8, Laâyoune</div>`)[0];
+                popup_ed0ef1481faded813612e100412dedd6.setContent(html_72486936daef1c6d1a4ca398395541f0);
+            
+        
+
+        circle_marker_9caadf7b9c7263fec64fb0d05bbad515.bindPopup(popup_ed0ef1481faded813612e100412dedd6)
+        ;
+
+        
+    
+    
+            var circle_19818c85b1b19be20081f4d225b2c0d6 = L.circle(
+                [27.1332986, -13.185187],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_0e7a75b59b8adae6b63baba0c97569da = L.circleMarker(
+                [27.1407243, -13.170401],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_d3099b4caac440336e00a719d3adab69 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_0f68ffee5556484de33fe341561b552d = $(`<div id="html_0f68ffee5556484de33fe341561b552d" style="width: 100.0%; height: 100.0%;"><b>pharmacie Borj ALHIKMA</b><br>4RRH+7R, Laâyoune</div>`)[0];
+                popup_d3099b4caac440336e00a719d3adab69.setContent(html_0f68ffee5556484de33fe341561b552d);
+            
+        
+
+        circle_marker_0e7a75b59b8adae6b63baba0c97569da.bindPopup(popup_d3099b4caac440336e00a719d3adab69)
+        ;
+
+        
+    
+    
+            var circle_67efca57c7977fd2c9d637fe2459bf5d = L.circle(
+                [27.1407243, -13.170401],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_32025c778530ad71828b58c57539d314 = L.circleMarker(
+                [27.1364037, -13.1852155],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_1a40c11388a3a20c6c20da82cb400dbf = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_ccdc1d2d85ecc92b4126ff4bedccbb05 = $(`<div id="html_ccdc1d2d85ecc92b4126ff4bedccbb05" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al Fath</b><br>4RP7+HW7, Laâyoune</div>`)[0];
+                popup_1a40c11388a3a20c6c20da82cb400dbf.setContent(html_ccdc1d2d85ecc92b4126ff4bedccbb05);
+            
+        
+
+        circle_marker_32025c778530ad71828b58c57539d314.bindPopup(popup_1a40c11388a3a20c6c20da82cb400dbf)
+        ;
+
+        
+    
+    
+            var circle_c87b44e25a66597dd1b58398a49a53c1 = L.circle(
+                [27.1364037, -13.1852155],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_ff90fb5ff64a17f29a547ef103f38917 = L.circleMarker(
+                [27.1257782, -13.1656192],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_bcc871507c2f81fb07504dd4590d9e4f = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_65b9ee083094aadd115dd1162faacc2d = $(`<div id="html_65b9ee083094aadd115dd1162faacc2d" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Kenz Seha</b><br>Ben Zaid, Lotissement Al Amal 2 , Avenue Oussama, N°351, El Aaiún</div>`)[0];
+                popup_bcc871507c2f81fb07504dd4590d9e4f.setContent(html_65b9ee083094aadd115dd1162faacc2d);
+            
+        
+
+        circle_marker_ff90fb5ff64a17f29a547ef103f38917.bindPopup(popup_bcc871507c2f81fb07504dd4590d9e4f)
+        ;
+
+        
+    
+    
+            var circle_da18dae2005c9882bf2d7572ca54a318 = L.circle(
+                [27.1257782, -13.1656192],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            var circle_marker_45087ac8673f7a2609fab9b7dbaedcfb = L.circleMarker(
+                [27.1350133, -13.1634597],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 1.0, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 4, "stroke": true, "weight": 3}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+        var popup_c7bb32fe613941f2fab2e2a88e33628d = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_77cf8f5a1f7d4a68a90356e83d2045a1 = $(`<div id="html_77cf8f5a1f7d4a68a90356e83d2045a1" style="width: 100.0%; height: 100.0%;"><b>Pharmacie Al mousstakbal</b><br>Laâyoune</div>`)[0];
+                popup_c7bb32fe613941f2fab2e2a88e33628d.setContent(html_77cf8f5a1f7d4a68a90356e83d2045a1);
+            
+        
+
+        circle_marker_45087ac8673f7a2609fab9b7dbaedcfb.bindPopup(popup_c7bb32fe613941f2fab2e2a88e33628d)
+        ;
+
+        
+    
+    
+            var circle_27533a9f9b590361097793ad603ffd97 = L.circle(
+                [27.1350133, -13.1634597],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "gray", "fillOpacity": 0.5, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 300, "stroke": true, "weight": 1}
+            ).addTo(feature_group_b26e1aab13a1db30ece388fb9daa38ef);
+        
+    
+            feature_group_b26e1aab13a1db30ece388fb9daa38ef.addTo(map_a0946bb33139fd022e49ba99256fb5a3);
+        
+    
+            var layer_control_5892c717881f2fbdd8b602e6eec13805_layers = {
+                base_layers : {
+                    "cartodbpositron" : tile_layer_caa705b8f07450d46ac92d60e4dd98ed,
+                    "Google Maps" : tile_layer_2f7a86eda4970ad19ce74612d936f360,
+                    "Google Satellite" : tile_layer_5f3f31f1b1e51b410b176b98494b837e,
+                    "OpenStreetMap" : tile_layer_d15dd62f60466f00bfca3f6703108c13,
+                },
+                overlays :  {
+                    "Pharmacies" : feature_group_b26e1aab13a1db30ece388fb9daa38ef,
+                },
+            };
+            let layer_control_5892c717881f2fbdd8b602e6eec13805 = L.control.layers(
+                layer_control_5892c717881f2fbdd8b602e6eec13805_layers.base_layers,
+                layer_control_5892c717881f2fbdd8b602e6eec13805_layers.overlays,
+                {
+  "position": "topright",
+  "collapsed": true,
+  "autoZIndex": true,
+}
+            ).addTo(map_a0946bb33139fd022e49ba99256fb5a3);
+
+        
+</script>
+</html>
